@@ -6,7 +6,6 @@ import {
   Raycaster,
 } from './libs/three137/three.module.js';
 import { JoyStick } from './libs/JoyStick.js';
-//import { Game } from './Game.js';
 
 class Controller {
   constructor(game) {
