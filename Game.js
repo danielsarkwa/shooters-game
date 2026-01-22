@@ -6,6 +6,9 @@ import { LoadingBar } from './libs/LoadingBar.js';
 import { Pathfinding } from './libs/pathfinding/Pathfinding.js';
 import { User } from './User.js';
 import { Controller } from './Controller.js';
+import { BulletHandler } from './BulletHandler.js';
+import { UI } from './UI.js';
+import { SFX } from './libs/SFX.js';
 
 class Game {
   constructor() {
@@ -25,8 +28,8 @@ class Game {
       0.1,
       500,
     );
-    this.camera.position.set(-10.6, 1.6, -1.46);
-    this.camera.rotation.y = -Math.PI * 0.5;
+    this.camera.position.set(-10.6, 1.6, -3.5);
+    this.camera.rotation.y = -Math.PI * 0.6;
 
     let col = 0x201510;
     this.scene = new THREE.Scene();
@@ -62,7 +65,71 @@ class Game {
 
     this.load();
 
+    this.raycaster = new THREE.Raycaster();
+    this.tmpVec = new THREE.Vector3();
+
+    this.active = false;
+
     window.addEventListener('resize', this.resize.bind(this));
+  }
+
+  startGame() {
+    this.user.reset();
+    this.npcHandler.reset();
+    this.ui.ammo = 1;
+    this.ui.health = 1;
+    this.active = true;
+    this.controller.cameraBase.getWorldPosition(this.camera.position);
+    this.controller.cameraBase.getWorldQuaternion(this.camera.quaternion);
+    this.sfx.play('atmos');
+  }
+
+  seeUser(pos, seethrough = false) {
+    if (this.seethrough) {
+      this.seethrough.forEach((child) => {
+        child.material.transparent = false;
+        child.material.opacity = 1;
+        //child.visible = true;
+      });
+      delete this.seethrough;
+    }
+
+    this.tmpVec.copy(this.user.position).sub(pos).normalize();
+    this.raycaster.set(pos, this.tmpVec);
+
+    const intersects = this.raycaster.intersectObjects(
+      this.factory.children,
+      true,
+    );
+    let userVisible = true;
+
+    if (intersects.length > 0) {
+      const dist = this.tmpVec.copy(this.user.position).distanceTo(pos);
+
+      if (seethrough) {
+        this.seethrough = [];
+        intersects.some((intersect) => {
+          if (intersect.distance < dist) {
+            this.seethrough.push(intersect.object);
+            //intersect.object.visible = false;
+            intersect.object.material.transparent = true;
+            intersect.object.material.opacity = 0.3;
+          } else {
+            return true;
+          }
+        });
+      } else {
+        userVisible = intersects[0].distance > dist;
+      }
+    }
+
+    return userVisible;
+  }
+
+  gameover() {
+    this.active = false;
+    this.ui.showGameover();
+    this.sfx.stop('atmos');
   }
 
   initPathfinding(navmesh) {
@@ -150,6 +217,7 @@ class Game {
     this.loadEnvironment();
     this.npcHandler = new NPCHandler(this);
     this.user = new User(this, new THREE.Vector3(-5.97, 0.021, -1.49), 1.57);
+    this.ui = new UI(this);
   }
 
   loadEnvironment() {
@@ -176,8 +244,6 @@ class Game {
               this.navmesh.geometry.rotateX(Math.PI / 2);
               this.navmesh.quaternion.identity();
               this.navmesh.position.set(0, 0, 0);
-              //child.material.transparent = true;
-              //child.material.opacity = 0.3;
               child.material.visible = false;
             } else if (child.name.includes('fan')) {
               this.fans.push(child);
@@ -215,10 +281,6 @@ class Game {
           });
         }
 
-        this.controller = new Controller(this);
-
-        this.renderer.setAnimationLoop(this.render.bind(this));
-
         this.initPathfinding(this.navmesh);
 
         this.loadingBar.visible = !this.loadingBar.loaded;
@@ -234,8 +296,31 @@ class Game {
     );
   }
 
+  initSounds() {
+    this.listener = new THREE.AudioListener();
+    this.camera.add(this.listener);
+    this.sfx = new SFX(
+      this.camera,
+      `${this.assetsPath}factory/sfx/`,
+      this.listener,
+    );
+    this.sfx.load('atmos', true, 0.1);
+    this.user.initSounds();
+    this.npcHandler.npcs.forEach((npc) => npc.initSounds());
+  }
+
   startRendering() {
-    this.renderer.setAnimationLoop(this.render.bind(this));
+    if (
+      this.npcHandler.ready &&
+      this.user.ready &&
+      this.bulletHandler == undefined
+    ) {
+      this.controller = new Controller(this);
+      this.bulletHandler = new BulletHandler(this);
+      this.renderer.setAnimationLoop(this.render.bind(this));
+      this.ui.visible = true;
+      this.initSounds();
+    }
   }
 
   render() {
@@ -248,12 +333,16 @@ class Game {
     }
 
     if (this.npcHandler !== undefined) this.npcHandler.update(dt);
-    if (this.user !== undefined && this.user.ready) {
-      this.user.update(dt);
-      if (this.controller !== undefined) this.controller.update(dt);
-    }
+    if (this.user !== undefined) this.user.update(dt);
+    if (this.controller !== undefined) this.controller.update(dt);
+    if (this.bulletHandler !== undefined) this.bulletHandler.update(dt);
+    if (this.tween !== undefined) this.tween.update(dt);
 
-    this.renderer.render(this.scene, this.camera);
+    if (this.composer) {
+      this.composer.render();
+    } else {
+      this.renderer.render(this.scene, this.camera);
+    }
   }
 }
 

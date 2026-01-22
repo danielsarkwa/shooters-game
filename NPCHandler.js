@@ -7,6 +7,7 @@ class NPCHandler {
   constructor(game) {
     this.game = game;
     this.loadingBar = this.game.loadingBar;
+    this.ready = false;
     this.load();
   }
 
@@ -33,6 +34,12 @@ class NPCHandler {
         self.npcs[0].newPath(pt, true);
       }
     }
+  }
+
+  reset() {
+    this.npcs.forEach((npc) => {
+      npc.reset();
+    });
   }
 
   load() {
@@ -104,6 +111,7 @@ class NPCHandler {
     });
 
     this.loadingBar.visible = !this.loadingBar.loaded;
+    this.ready = true;
 
     this.game.startRendering();
   }

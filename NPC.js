@@ -1,4 +1,5 @@
 import * as THREE from './libs/three137/three.module.js';
+import { SFX } from './libs/SFX.js';
 
 class NPC {
   constructor(options) {
@@ -38,7 +39,6 @@ class NPC {
     this.object.lookAt(pt);
 
     if (options.animations) {
-      //Use this option to set multiple animations directly
       this.mixer = new THREE.AnimationMixer(options.object);
       options.animations.forEach((animation) => {
         this.animations[animation.name.toLowerCase()] = animation;
@@ -46,9 +46,38 @@ class NPC {
     }
   }
 
+  initSounds() {
+    const assetsPath = `${this.app.assetsPath}factory/sfx/`;
+    this.sfx = new SFX(this.app.camera, assetsPath, this.app.listener);
+    this.sfx.load('footsteps', true, 0.6, this.object);
+    this.sfx.load('groan', false, 0.6, this.object);
+    this.sfx.load('shot', false, 0.6, this.object);
+  }
+
+  reset() {
+    this.dead = false;
+    this.object.position.copy(this.randomWaypoint);
+    let pt = this.randomWaypoint;
+    let count = 0;
+    while (this.object.position.distanceToSquared(pt) < 1 && count < 10) {
+      pt = this.randomWaypoint;
+      count++;
+    }
+    this.newPath(pt);
+  }
+
   get randomWaypoint() {
     const index = Math.floor(Math.random() * this.waypoints.length);
     return this.waypoints[index];
+  }
+
+  setTargetDirection(pt) {
+    const player = this.object;
+    pt.y = player.position.y;
+    const quaternion = player.quaternion.clone();
+    player.lookAt(pt);
+    this.quaternion = player.quaternion.clone();
+    player.quaternion.copy(quaternion);
   }
 
   newPath(pt) {
@@ -57,15 +86,12 @@ class NPC {
     if (this.pathfinder === undefined) {
       this.calculatedPath = [pt.clone()];
       //Calculate target direction
-      pt.y = player.position.y;
-      const quaternion = player.quaternion.clone();
-      player.lookAt(pt);
-      this.quaternion = player.quaternion.clone();
-      player.quaternion.copy(quaternion);
+      this.setTargetDirection(pt.clone());
       this.action = 'walking';
       return;
     }
 
+    if (this.sfx) this.sfx.play('footsteps');
     //console.log(`New path to ${pt.x.toFixed(1)}, ${pt.y.toFixed(2)}, ${pt.z.toFixed(2)}`);
 
     const targetGroup = this.pathfinder.getGroup(this.ZONE, pt);
@@ -86,12 +112,7 @@ class NPC {
     if (this.calculatedPath && this.calculatedPath.length) {
       this.action = 'walking';
 
-      const pt = this.calculatedPath[0].clone();
-      pt.y = player.position.y;
-      const quaternion = player.quaternion.clone();
-      player.lookAt(pt);
-      this.quaternion = player.quaternion.clone();
-      player.quaternion.copy(quaternion);
+      this.setTargetDirection(this.calculatedPath[0].clone());
 
       if (this.showPath) {
         if (this.pathLines) this.app.scene.remove(this.pathLines);
@@ -127,6 +148,8 @@ class NPC {
         });
       }
     } else {
+      if (this.sfx) this.sfx.stop('footsteps');
+
       this.action = 'idle';
 
       if (this.pathfinder) {
@@ -160,6 +183,12 @@ class NPC {
       if (name == 'shot') {
         action.clampWhenFinished = true;
         action.setLoop(THREE.LoopOnce);
+        this.dead = true;
+        if (this.sfx) {
+          this.sfx.stop('footsteps');
+          this.sfx.play('groan');
+        }
+        delete this.calculatedPath;
       }
       action.reset();
       const nofade = this.actionName == 'shot';
@@ -174,6 +203,10 @@ class NPC {
       }
       this.curAction = action;
     }
+  }
+
+  get position() {
+    return this.object.position;
   }
 
   update(dt) {
@@ -213,12 +246,7 @@ class NPC {
             this.action = 'idle';
           }
         } else {
-          const pt = this.calculatedPath[0].clone();
-          pt.y = player.position.y;
-          const quaternion = player.quaternion.clone();
-          player.lookAt(pt);
-          this.quaternion = player.quaternion.clone();
-          player.quaternion.copy(quaternion);
+          this.setTargetDirection(this.calculatedPath[0].clone());
         }
       }
     } else {
