@@ -1,10 +1,11 @@
-import * as THREE from './libs/three137/three.module.js';
-import { GLTFLoader } from './libs/three137/GLTFLoader.js';
-import { RGBELoader } from './libs/three137/RGBELoader.js';
+import * as THREE from '../../libs/three137/three.module.js';
+import { GLTFLoader } from '../../libs/three137/GLTFLoader.js';
+import { RGBELoader } from '../../libs/three137/RGBELoader.js';
 import { NPCHandler } from './NPCHandler.js';
-import { LoadingBar } from './libs/LoadingBar.js';
-import { Pathfinding } from './libs/pathfinding/Pathfinding.js';
+import { LoadingBar } from '../../libs/LoadingBar.js';
+import { Pathfinding } from '../../libs/pathfinding/Pathfinding.js';
 import { User } from './User.js';
+import { Controller } from './Controller.js';
 
 class Game {
   constructor() {
@@ -16,7 +17,7 @@ class Game {
     this.loadingBar = new LoadingBar();
     this.loadingBar.visible = false;
 
-    this.assetsPath = './assets/';
+    this.assetsPath = '../../assets/';
 
     this.camera = new THREE.PerspectiveCamera(
       45,
@@ -148,7 +149,7 @@ class Game {
   load() {
     this.loadEnvironment();
     this.npcHandler = new NPCHandler(this);
-    this.user = new User(this, new THREE.Vector3(-5.97, 0.021, -1.49), 0);
+    this.user = new User(this, new THREE.Vector3(-5.97, 0.021, -1.49), 1.57);
   }
 
   loadEnvironment() {
@@ -175,6 +176,8 @@ class Game {
               this.navmesh.geometry.rotateX(Math.PI / 2);
               this.navmesh.quaternion.identity();
               this.navmesh.position.set(0, 0, 0);
+              //child.material.transparent = true;
+              //child.material.opacity = 0.3;
               child.material.visible = false;
             } else if (child.name.includes('fan')) {
               this.fans.push(child);
@@ -212,6 +215,8 @@ class Game {
           });
         }
 
+        this.controller = new Controller(this);
+
         this.renderer.setAnimationLoop(this.render.bind(this));
 
         this.initPathfinding(this.navmesh);
@@ -243,7 +248,10 @@ class Game {
     }
 
     if (this.npcHandler !== undefined) this.npcHandler.update(dt);
-    if (this.user !== undefined) this.user.update(dt);
+    if (this.user !== undefined && this.user.ready) {
+      this.user.update(dt);
+      if (this.controller !== undefined) this.controller.update(dt);
+    }
 
     this.renderer.render(this.scene, this.camera);
   }

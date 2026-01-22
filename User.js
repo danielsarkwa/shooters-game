@@ -9,9 +9,9 @@ import {
   SphereGeometry,
   MeshBasicMaterial,
   Mesh,
-} from './libs/three137/three.module.js';
-import { GLTFLoader } from './libs/three137/GLTFLoader.js';
-import { DRACOLoader } from './libs/three137/DRACOLoader.js';
+} from '../../libs/three137/three.module.js';
+import { GLTFLoader } from '../../libs/three137/GLTFLoader.js';
+import { DRACOLoader } from '../../libs/three137/DRACOLoader.js';
 
 class User {
   constructor(game, pos, heading) {
@@ -120,6 +120,8 @@ class User {
         this.mixer = new AnimationMixer(gltf.scene);
 
         this.action = 'idle';
+
+        this.ready = true;
       },
       // called while loading is progressing
       (xhr) => {
@@ -158,8 +160,14 @@ class User {
       if (this.rifle && this.rifleDirection) {
         const q = this.rifleDirection[name.toLowerCase()];
         if (q !== undefined) {
+          const start = new Quaternion();
+          start.copy(this.rifle.quaternion);
           this.rifle.quaternion.copy(q);
           this.rifle.rotateX(1.57);
+          const end = new Quaternion();
+          end.copy(this.rifle.quaternion);
+          this.rotateRifle = { start, end, time: 0 };
+          this.rifle.quaternion.copy(start);
         }
       }
     }
@@ -167,6 +175,19 @@ class User {
 
   update(dt) {
     if (this.mixer) this.mixer.update(dt);
+    if (this.rotateRifle !== undefined) {
+      this.rotateRifle.time += dt;
+      if (this.rotateRifle.time > 0.5) {
+        this.rifle.quaternion.copy(this.rotateRifle.end);
+        delete this.rotateRifle;
+      } else {
+        this.rifle.quaternion.slerpQuaternions(
+          this.rotateRifle.start,
+          this.rotateRifle.end,
+          this.rotateRifle.time * 2,
+        );
+      }
+    }
   }
 }
 
