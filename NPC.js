@@ -51,22 +51,17 @@ class NPC {
     return this.waypoints[index];
   }
 
-  setTargetDirection(pt) {
-    const player = this.object;
-    pt.y = player.position.y;
-    const quaternion = player.quaternion.clone();
-    player.lookAt(pt);
-    this.quaternion = player.quaternion.clone();
-    player.quaternion.copy(quaternion);
-  }
-
   newPath(pt) {
     const player = this.object;
 
     if (this.pathfinder === undefined) {
       this.calculatedPath = [pt.clone()];
       //Calculate target direction
-      this.setTargetDirection(pt.clone());
+      pt.y = player.position.y;
+      const quaternion = player.quaternion.clone();
+      player.lookAt(pt);
+      this.quaternion = player.quaternion.clone();
+      player.quaternion.copy(quaternion);
       this.action = 'walking';
       return;
     }
@@ -91,7 +86,12 @@ class NPC {
     if (this.calculatedPath && this.calculatedPath.length) {
       this.action = 'walking';
 
-      this.setTargetDirection(this.calculatedPath[0].clone());
+      const pt = this.calculatedPath[0].clone();
+      pt.y = player.position.y;
+      const quaternion = player.quaternion.clone();
+      player.lookAt(pt);
+      this.quaternion = player.quaternion.clone();
+      player.quaternion.copy(quaternion);
 
       if (this.showPath) {
         if (this.pathLines) this.app.scene.remove(this.pathLines);
@@ -213,7 +213,12 @@ class NPC {
             this.action = 'idle';
           }
         } else {
-          this.setTargetDirection(this.calculatedPath[0].clone());
+          const pt = this.calculatedPath[0].clone();
+          pt.y = player.position.y;
+          const quaternion = player.quaternion.clone();
+          player.lookAt(pt);
+          this.quaternion = player.quaternion.clone();
+          player.quaternion.copy(quaternion);
         }
       }
     } else {

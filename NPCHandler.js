@@ -8,7 +8,6 @@ class NPCHandler {
     this.game = game;
     this.loadingBar = this.game.loadingBar;
     this.load();
-    this.initMouseHandler();
   }
 
   initMouseHandler() {
@@ -39,7 +38,7 @@ class NPCHandler {
   load() {
     const loader = new GLTFLoader().setPath(`${this.game.assetsPath}factory/`);
     const dracoLoader = new DRACOLoader();
-    dracoLoader.setDecoderPath('./libs/three137/draco/');
+    dracoLoader.setDecoderPath('../../libs/three137/draco/');
     loader.setDRACOLoader(dracoLoader);
     this.loadingBar.visible = true;
 
@@ -67,7 +66,11 @@ class NPCHandler {
   }
 
   initNPCs(gltf = this.gltf) {
+    this.waypoints = this.game.waypoints;
+
     const gltfs = [gltf];
+
+    for (let i = 0; i < 3; i++) gltfs.push(this.cloneGLTF(gltf));
 
     this.npcs = [];
 
@@ -77,6 +80,7 @@ class NPCHandler {
       object.traverse(function (child) {
         if (child.isMesh) {
           child.castShadow = true;
+          child.frustumCulled = false;
         }
       });
 
@@ -84,16 +88,17 @@ class NPCHandler {
         object: object,
         speed: 0.8,
         animations: gltf.animations,
+        waypoints: this.waypoints,
         app: this.game,
-        showPath: true,
+        showPath: false,
         zone: 'factory',
         name: 'swat-guy',
       };
 
       const npc = new NPC(options);
 
-      npc.object.position.set(-7.607, 0.017, -7.713);
-      npc.action = 'idle';
+      npc.object.position.copy(this.randomWaypoint);
+      npc.newPath(this.randomWaypoint);
 
       this.npcs.push(npc);
     });
@@ -101,6 +106,55 @@ class NPCHandler {
     this.loadingBar.visible = !this.loadingBar.loaded;
 
     this.game.startRendering();
+  }
+
+  cloneGLTF(gltf) {
+    const clone = {
+      animations: gltf.animations,
+      scene: gltf.scene.clone(true),
+    };
+
+    const skinnedMeshes = {};
+
+    gltf.scene.traverse((node) => {
+      if (node.isSkinnedMesh) {
+        skinnedMeshes[node.name] = node;
+      }
+    });
+
+    const cloneBones = {};
+    const cloneSkinnedMeshes = {};
+
+    clone.scene.traverse((node) => {
+      if (node.isBone) {
+        cloneBones[node.name] = node;
+      }
+      if (node.isSkinnedMesh) {
+        cloneSkinnedMeshes[node.name] = node;
+      }
+    });
+
+    for (let name in skinnedMeshes) {
+      const skinnedMesh = skinnedMeshes[name];
+      const skeleton = skinnedMesh.skeleton;
+      const cloneSkinnedMesh = cloneSkinnedMeshes[name];
+      const orderedCloneBones = [];
+      for (let i = 0; i < skeleton.bones.length; ++i) {
+        const cloneBone = cloneBones[skeleton.bones[i].name];
+        orderedCloneBones.push(cloneBone);
+      }
+      cloneSkinnedMesh.bind(
+        new Skeleton(orderedCloneBones, skeleton.boneInverses),
+        cloneSkinnedMesh.matrixWorld,
+      );
+    }
+
+    return clone;
+  }
+
+  get randomWaypoint() {
+    const index = Math.floor(Math.random() * this.waypoints.length);
+    return this.waypoints[index];
   }
 
   update(dt) {

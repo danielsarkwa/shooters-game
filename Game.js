@@ -4,6 +4,7 @@ import { RGBELoader } from './libs/three137/RGBELoader.js';
 import { NPCHandler } from './NPCHandler.js';
 import { LoadingBar } from './libs/LoadingBar.js';
 import { Pathfinding } from './libs/pathfinding/Pathfinding.js';
+import { User } from './User.js';
 
 class Game {
   constructor() {
@@ -23,9 +24,8 @@ class Game {
       0.1,
       500,
     );
-
-    this.camera.position.set(0, 40, 20);
-    this.camera.lookAt(0, 0, -10);
+    this.camera.position.set(-10.6, 1.6, -1.46);
+    this.camera.rotation.y = -Math.PI * 0.5;
 
     let col = 0x201510;
     this.scene = new THREE.Scene();
@@ -39,7 +39,6 @@ class Game {
     light.position.set(4, 20, 20);
     light.target.position.set(-2, 0, 0);
     light.castShadow = true;
-
     //Set up shadow properties for the light
     light.shadow.mapSize.width = 1024;
     light.shadow.mapSize.height = 512;
@@ -66,7 +65,6 @@ class Game {
   }
 
   initPathfinding(navmesh) {
-    // to get these, console path when you click on the mesh and copy them there to be reunsed
     this.waypoints = [
       new THREE.Vector3(
         17.73372016326552,
@@ -109,7 +107,6 @@ class Game {
         -12.265553884212125,
       ),
     ];
-
     this.pathfinder = new Pathfinding();
     this.pathfinder.setZoneData(
       'factory',
@@ -151,6 +148,7 @@ class Game {
   load() {
     this.loadEnvironment();
     this.npcHandler = new NPCHandler(this);
+    this.user = new User(this, new THREE.Vector3(-5.97, 0.021, -1.49), 0);
   }
 
   loadEnvironment() {
@@ -177,8 +175,7 @@ class Game {
               this.navmesh.geometry.rotateX(Math.PI / 2);
               this.navmesh.quaternion.identity();
               this.navmesh.position.set(0, 0, 0);
-              child.material.transparent = true;
-              child.material.opacity = 0.5;
+              child.material.visible = false;
             } else if (child.name.includes('fan')) {
               this.fans.push(child);
             } else if (child.material.name.includes('elements2')) {
@@ -246,6 +243,7 @@ class Game {
     }
 
     if (this.npcHandler !== undefined) this.npcHandler.update(dt);
+    if (this.user !== undefined) this.user.update(dt);
 
     this.renderer.render(this.scene, this.camera);
   }
