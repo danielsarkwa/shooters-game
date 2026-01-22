@@ -4,8 +4,8 @@ import {
   Vector3,
   Quaternion,
   Raycaster,
-} from '../../libs/three137/three.module.js';
-import { JoyStick } from '../../libs/JoyStick.js';
+} from './libs/three137/three.module.js';
+import { JoyStick } from './libs/JoyStick.js';
 //import { Game } from './Game.js';
 
 class Controller {
