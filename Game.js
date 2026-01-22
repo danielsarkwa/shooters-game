@@ -1,8 +1,9 @@
 import * as THREE from './libs/three137/three.module.js';
 import { GLTFLoader } from './libs/three137/GLTFLoader.js';
 import { RGBELoader } from './libs/three137/RGBELoader.js';
-import { OrbitControls } from './libs/three137/OrbitControls.js';
+import { NPCHandler } from './NPCHandler.js';
 import { LoadingBar } from './libs/LoadingBar.js';
+import { Pathfinding } from './libs/pathfinding/Pathfinding.js';
 
 class Game {
   constructor() {
@@ -14,7 +15,7 @@ class Game {
     this.loadingBar = new LoadingBar();
     this.loadingBar.visible = false;
 
-    this.assetsPath = '../../assets/';
+    this.assetsPath = './assets/';
 
     this.camera = new THREE.PerspectiveCamera(
       45,
@@ -22,7 +23,9 @@ class Game {
       0.1,
       500,
     );
-    this.camera.position.set(-11, 1.5, -1.5);
+
+    this.camera.position.set(0, 40, 20);
+    this.camera.lookAt(0, 0, -10);
 
     let col = 0x201510;
     this.scene = new THREE.Scene();
@@ -41,16 +44,13 @@ class Game {
     light.shadow.mapSize.width = 1024;
     light.shadow.mapSize.height = 512;
     light.shadow.camera.near = 0.5;
-    light.shadow.camera.far = 60;
+    light.shadow.camera.far = 50;
     const d = 30;
     light.shadow.camera.left = -d;
     light.shadow.camera.bottom = -d * 0.25;
     light.shadow.camera.right = light.shadow.camera.top = d;
     this.scene.add(light);
     this.light = light;
-
-    const helper = new THREE.CameraHelper(light.shadow.camera);
-    this.scene.add(helper);
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     this.renderer.shadowMap.enabled = true;
@@ -60,11 +60,62 @@ class Game {
     container.appendChild(this.renderer.domElement);
     this.setEnvironment();
 
-    const controls = new OrbitControls(this.camera, this.renderer.domElement);
-
     this.load();
 
     window.addEventListener('resize', this.resize.bind(this));
+  }
+
+  initPathfinding(navmesh) {
+    // to get these, console path when you click on the mesh and copy them there to be reunsed
+    this.waypoints = [
+      new THREE.Vector3(
+        17.73372016326552,
+        0.39953298254866443,
+        -0.7466724607286782,
+      ),
+      new THREE.Vector3(
+        20.649478054772402,
+        0.04232912113775987,
+        -18.282935518174437,
+      ),
+      new THREE.Vector3(
+        11.7688416798274,
+        0.11264635905666916,
+        -23.23102176233945,
+      ),
+      new THREE.Vector3(
+        -3.111551689570482,
+        0.18245423057147991,
+        -22.687392486867505,
+      ),
+      new THREE.Vector3(
+        -13.772447796604245,
+        0.1260277454451636,
+        -23.12237117145656,
+      ),
+      new THREE.Vector3(
+        -20.53385139415452,
+        0.0904175187063471,
+        -12.467546107992108,
+      ),
+      new THREE.Vector3(
+        -18.195950790753532,
+        0.17323640676321908,
+        -0.9593366354062719,
+      ),
+      new THREE.Vector3(
+        -6.603208729295872,
+        0.015786387893574227,
+        -12.265553884212125,
+      ),
+    ];
+
+    this.pathfinder = new Pathfinding();
+    this.pathfinder.setZoneData(
+      'factory',
+      Pathfinding.createZone(navmesh.geometry, 0.02),
+    );
+    if (this.npcHandler.gltf !== undefined) this.npcHandler.initNPCs();
   }
 
   resize() {
@@ -78,17 +129,19 @@ class Game {
     const pmremGenerator = new THREE.PMREMGenerator(this.renderer);
     pmremGenerator.compileEquirectangularShader();
 
-    const self = this;
-
     loader.load(
       'hdr/factory.hdr',
       (texture) => {
         const envMap = pmremGenerator.fromEquirectangular(texture).texture;
         pmremGenerator.dispose();
 
-        self.scene.environment = envMap;
+        this.scene.environment = envMap;
+
+        this.loadingBar.visible = !this.loadingBar.loaded;
       },
-      undefined,
+      (xhr) => {
+        this.loadingBar.update('envmap', xhr.loaded, xhr.total);
+      },
       (err) => {
         console.error(err.message);
       },
@@ -97,6 +150,7 @@ class Game {
 
   load() {
     this.loadEnvironment();
+    this.npcHandler = new NPCHandler(this);
   }
 
   loadEnvironment() {
@@ -107,7 +161,7 @@ class Game {
     // Load a glTF resource
     loader.load(
       // resource URL
-      'factory1.glb',
+      'factory2.glb',
       // called when the resource is loaded
       (gltf) => {
         this.scene.add(gltf.scene);
@@ -118,7 +172,14 @@ class Game {
 
         gltf.scene.traverse((child) => {
           if (child.isMesh) {
-            if (child.name.includes('fan')) {
+            if (child.name == 'NavMesh') {
+              this.navmesh = child;
+              this.navmesh.geometry.rotateX(Math.PI / 2);
+              this.navmesh.quaternion.identity();
+              this.navmesh.position.set(0, 0, 0);
+              child.material.transparent = true;
+              child.material.opacity = 0.5;
+            } else if (child.name.includes('fan')) {
               this.fans.push(child);
             } else if (child.material.name.includes('elements2')) {
               mergeObjects.elements2.push(child);
@@ -140,6 +201,8 @@ class Game {
           }
         });
 
+        this.scene.add(this.navmesh);
+
         for (let prop in mergeObjects) {
           const array = mergeObjects[prop];
           let material;
@@ -152,9 +215,11 @@ class Game {
           });
         }
 
-        this.loadingBar.visible = false;
-
         this.renderer.setAnimationLoop(this.render.bind(this));
+
+        this.initPathfinding(this.navmesh);
+
+        this.loadingBar.visible = !this.loadingBar.loaded;
       },
       // called while loading is progressing
       (xhr) => {
@@ -167,14 +232,20 @@ class Game {
     );
   }
 
+  startRendering() {
+    this.renderer.setAnimationLoop(this.render.bind(this));
+  }
+
   render() {
     const dt = this.clock.getDelta();
 
-    if (this.fans != undefined) {
+    if (this.fans !== undefined) {
       this.fans.forEach((fan) => {
         fan.rotateY(dt);
       });
     }
+
+    if (this.npcHandler !== undefined) this.npcHandler.update(dt);
 
     this.renderer.render(this.scene, this.camera);
   }
